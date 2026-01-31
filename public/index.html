@@ -376,11 +376,48 @@
 
         // 7. 复制链接并显示气泡
         window.copyLink = function(url, event) {
-            navigator.clipboard.writeText(url).then(() => {
-                showBubble(event.clientX, event.clientY, '已复制到剪贴板');
-            }).catch(err => {
+            // 优先尝试使用标准 Clipboard API (仅 HTTPS/localhost 可用)
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showBubble(event.clientX, event.clientY, '复制成功!');
+                }).catch(err => {
+                    console.warn('Clipboard API 失败，尝试回退方案', err);
+                    fallbackCopyText(url, event);
+                });
+            } else {
+                // 否则使用回退方案 (支持 HTTP)
+                fallbackCopyText(url, event);
+            }
+        }
+
+        // 兼容性复制函数 (使用 textarea 选中复制)
+        function fallbackCopyText(text, event) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            
+            // 确保元素不可见但存在于 DOM 中，且不影响布局
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            textArea.style.opacity = "0";
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                var successful = document.execCommand('copy');
+                if (successful) {
+                    showBubble(event.clientX, event.clientY, '复制成功!');
+                } else {
+                    showBubble(event.clientX, event.clientY, '复制失败');
+                }
+            } catch (err) {
+                console.error('Fallback: 无法复制', err);
                 showBubble(event.clientX, event.clientY, '复制失败');
-            });
+            }
+
+            document.body.removeChild(textArea);
         }
 
         // 8. 显示上浮气泡
