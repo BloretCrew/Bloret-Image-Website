@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 文档 - Bloret Image Host</title>
+    <link rel="stylesheet" href="/index.css">
+    <script type="module" src="https://unpkg.com/@fluentui/web-components"></script>
+    <style>
+        .code-block {
+            background: rgba(0,0,0,0.05);
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .param-table th, .param-table td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; max-width: 1200px; width: 100%; margin: 0 auto;">
+            <h1 style="font-size: 18px; margin: 0; font-weight: 600;">API Documentation</h1>
+            <div style="margin-left: auto;">
+                <a href="/" class="btn">返回首页</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content" style="margin-top: 80px; display: flex; justify-content: center;">
+        <div class="user-info-card" style="max-width: 800px; width: 100%;">
+            <div class="post-title">图片上传 API</div>
+            <div class="post-content">
+                <p>Bloret Image Host 提供了一个简单的 HTTP 接口用于上传图片。</p>
+                
+                <h3>接口地址</h3>
+                <div class="code-block">POST /api/upload</div>
+                
+                <h3>请求头 (Headers)</h3>
+                <div class="code-block">Content-Type: multipart/form-data</div>
+
+                <h3>请求参数</h3>
+                <table class="param-table">
+                    <tr>
+                        <th>参数名</th>
+                        <th>类型</th>
+                        <th>必填</th>
+                        <th>说明</th>
+                    </tr>
+                    <tr>
+                        <td>image</td>
+                        <td>File</td>
+                        <td>是</td>
+                        <td>要上传的图片文件 (支持 jpg, png, gif, webp)</td>
+                    </tr>
+                </table>
+
+                <h3>响应示例 (成功)</h3>
+                <div class="code-block">
+{
+  "success": true,
+  "message": "Upload successful",
+  "data": {
+    "url": "/img/1700000000000/a1b2c3d4e5f6...",
+    "timestamp": 1700000000000,
+    "md5": "a1b2c3d4e5f6...",
+    "filename": "a1b2c3d4e5f6....jpg"
+  }
+}
+                </div>
+
+                <h3>响应示例 (失败)</h3>
+                <div class="code-block">
+{
+  "success": false,
+  "message": "No file uploaded"
+}
+                </div>
+
+                <h3>CURL 示例</h3>
+                <div class="code-block">
+curl -X POST -F "image=@/path/to/photo.jpg" http://localhost:3000/api/upload
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

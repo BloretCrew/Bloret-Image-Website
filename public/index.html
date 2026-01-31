@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>百络图床</title>
+    <!-- Fluent UI Components -->
+    <script type="module" src="https://unpkg.com/@fluentui/web-components"></script>
+    <link rel="stylesheet" href="/index.css">
+    <style>
+        /* 针对图床的特定补充样式 */
+        body {
+            /* 确保拖拽全屏生效 */
+            min-height: 100vh;
+        }
+        
+        /* 拖拽时的全屏遮罩 */
+        #drag-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em;
+            color: #0078d4;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        #drag-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(255,255,255,0.4);
+        }
+
+        .upload-area:hover {
+            border-color: #0078d4;
+            background: rgba(255,255,255,0.6);
+        }
+
+        /* 文件列表样式 */
+        .file-list {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.6);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(0,0,0,0.05);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .file-preview {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-right: 15px;
+            background: #eee;
+        }
+
+        .file-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .file-name {
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .file-link {
+            font-size: 0.85em;
+            color: #0078d4;
+            margin-top: 4px;
+            display: block;
+            word-break: break-all;
+            cursor: pointer;
+        }
+
+        .file-action {
+            margin-left: 10px;
+        }
+        
+        .upload-actions {
+            margin-top: 20px; 
+            text-align: center; 
+            display: none; /* 默认隐藏，有文件时显示 */
+        }
+        
+        .upload-actions.show {
+            display: block;
+        }
+
+        /* 复制成功气泡样式 */
+        .copy-bubble {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10000;
+            animation: floatUp 0.8s ease-out forwards;
+            white-space: nowrap;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -100%); }
+            100% { opacity: 0; transform: translate(-50%, -250%); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 拖拽遮罩 -->
+    <div id="drag-overlay">释放以添加图片</div>
+
+    <!-- 顶栏 -->
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; max-width: 1200px; width: 100%; margin: 0 auto;">
+            <img src="/img/1769871391490/98a7056e04cb259c73f38b3f44591575" alt="Logo" style="height: 30px; margin-right: 10px;"> <!-- 假设你有一个 logo -->
+            <h1 style="font-size: 18px; margin: 0; font-weight: 600;">百络图床</h1>
+            <div style="margin-left: auto;">
+                <a href="/api/doc" class="btn">API 文档</a>
+                <a href="/" class="btn">首页</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区 -->
+    <div class="main-content" style="margin-top: 80px; display: flex; justify-content: center;">
+        <div class="user-info-card" style="max-width: 600px; width: 100%; margin: 0;">
+            <div class="post-title">上传图片</div>
+            <div class="post-content">
+                <!-- 点击上传区域 -->
+                <div class="upload-area" id="click-upload">
+                    <fluent-icon style="font-size: 32px; color: #0078d4;">☁️</fluent-icon>
+                    <p style="margin: 10px 0 0 0; font-weight: 600;">点击选择或拖拽图片至页面任意位置</p>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">支持 JPG, PNG, GIF, WEBP</p>
+                </div>
+                
+                <!-- 隐藏的文件输入框 -->
+                <input type="file" id="file-input" multiple accept="image/*" style="display: none;">
+
+                <!-- 文件列表 -->
+                <div class="file-list" id="file-list">
+                    <!-- JS 动态生成 -->
+                </div>
+
+                <!-- 上传按钮 -->
+                <div class="upload-actions" id="upload-btn-container">
+                    <button class="pushButton primary" style="width: 100%;" onclick="startUpload()">开始上传</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 脚本逻辑 -->
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const clickUpload = document.getElementById('click-upload');
+        const fileListEl = document.getElementById('file-list');
+        const dragOverlay = document.getElementById('drag-overlay');
+        const uploadBtnContainer = document.getElementById('upload-btn-container');
+
+        let pendingFiles = []; // 存储待上传的文件对象 {id, file, status, url}
+
+        // 1. 全局拖拽事件
+        let dragCounter = 0;
+
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            dragOverlay.classList.add('active');
+        });
+
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) {
+                dragOverlay.classList.remove('active');
+            }
+        });
+
+        window.addEventListener('dragover', (e) => e.preventDefault());
+
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dragOverlay.classList.remove('active');
+            
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        // 2. 点击上传
+        clickUpload.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = ''; // 重置以便重复选择
+        });
+
+        // 3. 处理文件添加
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                if (!file.type.startsWith('image/')) {
+                    alert('仅支持图片文件: ' + file.name);
+                    return;
+                }
+                
+                const id = Date.now() + Math.random().toString(36).substr(2, 9);
+                const fileObj = {
+                    id,
+                    file,
+                    status: 'pending', // pending, uploading, success, error
+                    url: null
+                };
+                
+                pendingFiles.push(fileObj);
+                renderFileItem(fileObj);
+            });
+            updateUI();
+        }
+
+        // 4. 渲染单个文件项
+        function renderFileItem(item) {
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.id = `item-${item.id}`;
+            
+            // 生成预览图
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                div.querySelector('.file-preview').src = e.target.result;
+            };
+            reader.readAsDataURL(item.file);
+
+            // 格式化大小
+            const size = (item.file.size / 1024).toFixed(2) + ' KB';
+
+            div.innerHTML = `
+                <img class="file-preview" src="">
+                <div class="file-info">
+                    <div class="file-name" title="${item.file.name}">${item.file.name}</div>
+                    <div class="file-meta">${size}</div>
+                    <div class="file-link" id="link-${item.id}" style="display:none;"></div>
+                    <div id="progress-${item.id}" style="height: 4px; background: #eee; margin-top: 5px; border-radius: 2px; display:none;">
+                        <div style="height: 100%; background: #0078d4; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+                <div class="file-action">
+                    <button class="pushButton secondary" onclick="removeFile('${item.id}')" style="padding: 4px 10px;">🗑️</button>
+                </div>
+            `;
+            
+            fileListEl.appendChild(div);
+        }
+
+        // 5. 移除文件
+        window.removeFile = function(id) {
+            pendingFiles = pendingFiles.filter(f => f.id !== id);
+            const el = document.getElementById(`item-${id}`);
+            if (el) el.remove();
+            updateUI();
+        }
+
+        function updateUI() {
+            // 如果有待上传的文件，显示上传按钮
+            const hasPending = pendingFiles.some(f => f.status === 'pending');
+            if (hasPending) {
+                uploadBtnContainer.classList.add('show');
+            } else {
+                uploadBtnContainer.classList.remove('show');
+            }
+        }
+
+        // 6. 执行上传
+        window.startUpload = async function() {
+            const btn = uploadBtnContainer.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = '上传中...';
+
+            for (let item of pendingFiles) {
+                if (item.status !== 'pending') continue;
+
+                item.status = 'uploading';
+                const itemEl = document.getElementById(`item-${item.id}`);
+                const progressBar = document.getElementById(`progress-${item.id}`);
+                const progressInner = progressBar.querySelector('div');
+                const linkEl = document.getElementById(`link-${item.id}`);
+                const deleteBtn = itemEl.querySelector('.file-action button'); // 上传后隐藏删除，或者保留看需求
+
+                progressBar.style.display = 'block';
+                progressInner.style.width = '50%'; // 模拟进度，因为 fetch 没有原生进度回调
+
+                const formData = new FormData();
+                formData.append('image', item.file);
+
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        item.status = 'success';
+                        item.url = result.data.url;
+                        
+                        progressInner.style.width = '100%';
+                        setTimeout(() => { progressBar.style.display = 'none'; }, 500);
+                        
+                        linkEl.style.display = 'block';
+                        const fullUrl = window.location.origin + result.data.url;
+                        // 链接文字点击也改为使用气泡提示
+                        linkEl.innerHTML = `🔗 <span onclick="copyLink('${fullUrl}', event)" title="点击复制" style="cursor:pointer;">${fullUrl}</span>`;
+                        
+                        // 成功后移除“删除”按钮，改为“复制”按钮
+                        const actionDiv = itemEl.querySelector('.file-action');
+                        actionDiv.innerHTML = `<button class="pushButton secondary" onclick="copyLink('${fullUrl}', event)" title="复制链接" style="padding: 4px 10px;">📋</button>`;
+                        
+                    } else {
+                        item.status = 'error';
+                        progressBar.style.display = 'none';
+                        linkEl.style.display = 'block';
+                        linkEl.style.color = 'red';
+                        linkEl.textContent = '上传失败: ' + result.message;
+                    }
+
+                } catch (error) {
+                    console.error(error);
+                    item.status = 'error';
+                    progressBar.style.display = 'none';
+                    linkEl.style.display = 'block';
+                    linkEl.style.color = 'red';
+                    linkEl.textContent = '网络错误';
+                }
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '开始上传';
+            updateUI(); // 重新检查是否还有 pending
+        }
+
+        // 7. 复制链接并显示气泡
+        window.copyLink = function(url, event) {
+            navigator.clipboard.writeText(url).then(() => {
+                showBubble(event.clientX, event.clientY, '已复制到剪贴板');
+            }).catch(err => {
+                showBubble(event.clientX, event.clientY, '复制失败');
+            });
+        }
+
+        // 8. 显示上浮气泡
+        function showBubble(x, y, message) {
+            const bubble = document.createElement('div');
+            bubble.className = 'copy-bubble';
+            bubble.textContent = message;
+            
+            // 设置位置
+            bubble.style.left = x + 'px';
+            bubble.style.top = y + 'px';
+            
+            document.body.appendChild(bubble);
+
+            // 动画结束后移除元素 (0.8s 与 CSS 动画时间一致)
+            setTimeout(() => {
+                bubble.remove();
+            }, 800);
+        }
+    </script>
+</body>
+</html>
