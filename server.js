@@ -48,6 +48,8 @@ app.get('/SF', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'SF.html'));
 });
 
+const sharp = require('sharp');
+
 app.get('/api/svg_files', (req, res) => {
     fs.readdir(SF_DIRECTORY, (err, files) => {
         if (err) {
@@ -56,6 +58,37 @@ app.get('/api/svg_files', (req, res) => {
         const svgFiles = files.filter(file => file.endsWith('.svg'));
         res.json(svgFiles);
     });
+});
+
+app.get('/SF/:name', async (req, res) => {
+    const iconName = req.params.name.endsWith('.svg') ? req.params.name : `${req.params.name}.svg`;
+    const iconPath = path.join(SF_DIRECTORY, iconName);
+    const color = req.query.color || 'black';
+    const isPng = req.query.png === 'true';
+
+    if (!fs.existsSync(iconPath)) {
+        return res.status(404).send('Icon not found');
+    }
+
+    try {
+        let svgBuffer = fs.readFileSync(iconPath);
+        let svgString = svgBuffer.toString();
+
+        // 替换 fill 或 stroke 颜色
+        const coloredSvg = svgString.replace(/(fill|stroke)="[^"]*"/g, `$1="${color}"`);
+
+        if (isPng) {
+            const pngBuffer = await sharp(Buffer.from(coloredSvg)).png().toBuffer();
+            res.type('image/png');
+            res.send(pngBuffer);
+        } else {
+            res.type('image/svg+xml');
+            res.send(coloredSvg);
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error processing icon');
+    }
 });
 
 app.get('/img/:ts/:hash', (req, res) => {
