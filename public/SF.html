@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple SF 图标展示</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f7;
+            position: relative; /* For loading bar positioning */
+        }
+        .loading-bar-container {
+            width: 100%;
+            height: 4px; /* Height of the loading bar */
+            background-color: #e0e0e0;
+            margin-top: 10px; /* Space below search bar */
+            border-radius: 2px;
+            overflow: hidden;
+            display: none; /* Hidden by default */
+            position: relative; /* For percentage text positioning */
+        }
+        .loading-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #007aff; /* Apple blue color */
+            transition: width 0.1s ease-out;
+        }
+        .loading-percentage {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: #666;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .icons-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .icon-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .icon-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .icon-display {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 10px;
+        }
+        .icon-name {
+            font-size: 12px;
+            text-align: center;
+            color: #333;
+            word-break: break-word;
+        }
+        .search-container {
+            max-width: 500px;
+            margin: 0 auto 30px;
+        }
+        #search-input {
+            width: 100%;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Apple SF 图标集</h1>
+    
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="搜索图标..." />
+        <div class="loading-bar-container" id="loading-bar-container">
+            <div class="loading-bar" id="loading-bar"></div>
+            <span class="loading-percentage" id="loading-percentage">0%</span>
+        </div>
+    </div>
+    
+    <div class="icons-container" id="icons-container">
+        <!-- 图标将通过JavaScript动态加载 -->
+    </div>
+
+    <div id="icon-count" style="text-align: center; margin-top: 20px; color: #666;"></div>
+
+    <script>
+        // 获取SVG文件列表并显示
+        async function loadSvgIcons() {
+            const loadingBarContainer = document.getElementById('loading-bar-container');
+            const loadingBar = document.getElementById('loading-bar');
+            const loadingPercentage = document.getElementById('loading-percentage');
+
+            loadingBarContainer.style.display = 'block'; // Show loading bar
+            loadingBar.style.width = '0%'; // Reset width
+            loadingPercentage.textContent = '0%'; // Reset percentage
+
+            try {
+                // 获取所有SVG文件的相对路径
+                const response = await fetch('/api/svg_files');
+                const svgFiles = await response.json();
+
+                const iconsContainer = document.getElementById('icons-container');
+                let loadedCount = 0;
+                const batchSize = 50; // Define batch size
+
+                for (let i = 0; i < svgFiles.length; i += batchSize) {
+                    const batch = svgFiles.slice(i, i + batchSize);
+                    const batchPromises = batch.map(file => {
+                        const iconItem = document.createElement('div');
+                        iconItem.className = 'icon-item';
+                        
+                        const iconDisplay = document.createElement('div');
+                        iconDisplay.className = 'icon-display';
+                        
+                        const iconName = document.createElement('div');
+                        iconName.className = 'icon-name';
+                        iconName.textContent = file.replace('.svg', '');
+                        
+                        iconItem.appendChild(iconDisplay);
+                        iconItem.appendChild(iconName);
+                        
+                        iconsContainer.appendChild(iconItem);
+
+                        return fetch(`SFs/${file}`)
+                            .then(response => response.text())
+                            .then(svgContent => {
+                                iconDisplay.innerHTML = svgContent;
+                                const svg = iconDisplay.querySelector('svg');
+                                if (svg) {
+                                    svg.setAttribute('width', '100%');
+                                    svg.setAttribute('height', '100%');
+                                }
+                            })
+                            .catch(error => {
+                                console.error(`加载 ${file} 失败:`, error);
+                                iconDisplay.textContent = '加载失败';
+                            })
+                            .finally(() => {
+                                loadedCount++;
+                                const progress = (loadedCount / svgFiles.length) * 100;
+                                loadingBar.style.width = `${progress}%`;
+                                loadingPercentage.textContent = `${Math.round(progress)}%`;
+                            });
+                    });
+                    await Promise.allSettled(batchPromises); // Wait for current batch to complete
+                }
+                loadingBarContainer.style.display = 'none'; // Hide loading bar
+                
+                // 添加搜索功能
+                const searchInput = document.getElementById('search-input');
+                searchInput.addEventListener('input', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const iconItems = document.querySelectorAll('.icon-item');
+                    
+                    iconItems.forEach(item => {
+                        const name = item.querySelector('.icon-name').textContent.toLowerCase();
+                        if (name.includes(searchTerm)) {
+                            item.style.display = 'flex';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+
+                // 显示图标总数
+                const iconCountElement = document.getElementById('icon-count');
+                iconCountElement.textContent = `总共 ${svgFiles.length} 个图标`;
+                
+            } catch (error) {
+                console.error('加载图标时出错:', error);
+                loadingBarContainer.style.display = 'none'; // Hide loading bar on error
+            }
+        }
+        
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', loadSvgIcons);
+    </script>
+</body>
+</html>
