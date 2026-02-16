@@ -437,6 +437,25 @@
                 bubble.remove();
             }, 800);
         }
+
+        // 9. 粘贴上传
+        window.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            const files = [];
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const blob = item.getAsFile();
+                    if (blob) {
+                        files.push(blob);
+                    }
+                }
+            }
+            if (files.length > 0) {
+                e.preventDefault();
+                handleFiles(files);
+            }
+        });
     </script>
 </body>
 </html>
