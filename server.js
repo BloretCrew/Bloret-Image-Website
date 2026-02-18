@@ -3,6 +3,41 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
+
+let pythonProcess = null;
+const PYTHON_PORT = 5000;
+
+// Start Python Server
+function startPythonServer() {
+    console.log('正在启动 Python NSFW 检测服务...');
+    
+    // 假设 python 命令在环境变量中，或者你可以指定完整路径
+    // 如果你的环境中是 python3，请修改为 python3
+    pythonProcess = spawn('python', ['server.py', PYTHON_PORT], {
+        cwd: __dirname,
+        stdio: 'inherit' // 让 Python 的输出显示在主进程控制台
+    });
+
+    pythonProcess.on('error', (err) => {
+        console.error('无法启动 Python 进程:', err);
+    });
+
+    pythonProcess.on('close', (code) => {
+        console.log(`Python 进程退出，退出码: ${code}`);
+    });
+}
+
+startPythonServer();
+
+// 优雅退出
+process.on('exit', () => {
+    if (pythonProcess) pythonProcess.kill();
+});
+process.on('SIGINT', () => {
+    if (pythonProcess) pythonProcess.kill();
+    process.exit();
+});
 
 let config = { port: 3000 };
 try {
