@@ -3,6 +3,17 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const crypto = require('crypto');
+const tf = require('@tensorflow/tfjs-node');
+const nsfw = require('nsfwjs');
+
+let model;
+// Load NSFW model
+nsfw.load().then((m) => {
+    model = m;
+    console.log('NSFW Model loaded');
+}).catch(err => {
+    console.error('Failed to load NSFW model', err);
+});
 
 let config = { port: 3000 };
 try {
@@ -17,6 +28,11 @@ const port = config.port;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR);
+}
+
+const UNNSFW_DIR = path.join(__dirname, 'unNSFW');
+if (!fs.existsSync(UNNSFW_DIR)) {
+    fs.mkdirSync(UNNSFW_DIR);
 }
 
 const SF_DIRECTORY = path.join(__dirname, 'SFs');
@@ -107,7 +123,7 @@ app.get('/img/:ts/:hash', (req, res) => {
     });
 });
 
-app.post('/api/upload', upload.single('image'), (req, res) => {
+app.post('/api/upload', upload.single('image'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
@@ -117,6 +133,32 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
     const ext = path.extname(originalName).toLowerCase() || '.jpg';
     
     const fileBuffer = fs.readFileSync(tempPath);
+
+    // NSFW Detection
+    if (model) {
+        try {
+            const image = await tf.node.decodeImage(fileBuffer, 3);
+            const predictions = await model.classify(image);
+            image.dispose();
+
+            const pornProb = predictions.find(p => p.className === 'Porn').probability;
+            const hentaiProb = predictions.find(p => p.className === 'Hentai').probability;
+
+            if (pornProb > 0.5 || hentaiProb > 0.5) {
+                const finalFileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`;
+                const unNSFWPath = path.join(UNNSFW_DIR, finalFileName);
+                
+                fs.rename(tempPath, unNSFWPath, (err) => {
+                    if (err) console.error('Error moving NSFW file:', err);
+                });
+                
+                return res.status(400).json({ success: false, message: 'NSFW content detected. Upload rejected.' });
+            }
+        } catch (err) {
+            console.error('NSFW Check Error:', err);
+        }
+    }
+
     const hashSum = crypto.createHash('md5');
     hashSum.update(fileBuffer);
     const hex = hashSum.digest('hex');
