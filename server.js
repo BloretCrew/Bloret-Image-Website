@@ -3,12 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const crypto = require('crypto');
-const tf = require('@tensorflow/tfjs-node');
-const nsfw = require('nsfwjs');
+const nsfwjs = require('nsfwjs');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 let model;
 // Load NSFW model
-nsfw.load().then((m) => {
+nsfwjs.load().then((m) => {
     model = m;
     console.log('NSFW Model loaded');
 }).catch(err => {
@@ -51,6 +51,37 @@ const storage = multer.diskStorage({
 })
 
 const upload = multer({ storage: storage });
+
+async function loadCustomImage(filePath) {
+    try {
+        const image = await loadImage(filePath);
+        const canvas = createCanvas(image.width, image.height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+        return canvas;
+    } catch (error) {
+        throw new Error(`无法加载图片: ${filePath}`);
+    }
+}
+
+async function isImageAdult(imagePath) {
+    try {
+        const image = await loadCustomImage(imagePath);
+        if (!model) {
+            throw new Error("NSFWJS 模型未加载");
+        }
+        const predictions = await model.classify(image);
+        console.log("图片审核预测结果:", predictions);
+        // 设定需要拦截的成人类别
+        const adultClasses = ['Porn', 'Hentai', 'Sexy'];
+        const adultPrediction = predictions.find(p => adultClasses.includes(p.className));
+        // 可根据实际情况进一步调整阈值，此处设为 0.3
+        return adultPrediction && adultPrediction.probability > 0.3;
+    } catch (error) {
+        console.error("图片审核失败:", error);
+        throw error;
+    }
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/SFs', express.static(SF_DIRECTORY));
@@ -132,33 +163,24 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
     const originalName = req.file.originalname;
     const ext = path.extname(originalName).toLowerCase() || '.jpg';
     
-    const fileBuffer = fs.readFileSync(tempPath);
-
     // NSFW Detection
-    if (model) {
-        try {
-            const image = await tf.node.decodeImage(fileBuffer, 3);
-            const predictions = await model.classify(image);
-            image.dispose();
-
-            const pornProb = predictions.find(p => p.className === 'Porn').probability;
-            const hentaiProb = predictions.find(p => p.className === 'Hentai').probability;
-
-            if (pornProb > 0.5 || hentaiProb > 0.5) {
-                const finalFileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`;
-                const unNSFWPath = path.join(UNNSFW_DIR, finalFileName);
-                
-                fs.rename(tempPath, unNSFWPath, (err) => {
-                    if (err) console.error('Error moving NSFW file:', err);
-                });
-                
-                return res.status(400).json({ success: false, message: 'NSFW content detected. Upload rejected.' });
-            }
-        } catch (err) {
-            console.error('NSFW Check Error:', err);
+    try {
+        const isAdult = await isImageAdult(tempPath);
+        if (isAdult) {
+            const finalFileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`;
+            const unNSFWPath = path.join(UNNSFW_DIR, finalFileName);
+            
+            fs.rename(tempPath, unNSFWPath, (err) => {
+                if (err) console.error('Error moving NSFW file:', err);
+            });
+            
+            return res.status(400).json({ success: false, message: 'NSFW content detected. Upload rejected.' });
         }
+    } catch (err) {
+        console.error('NSFW Check Error:', err);
     }
-
+    
+    const fileBuffer = fs.readFileSync(tempPath);
     const hashSum = crypto.createHash('md5');
     hashSum.update(fileBuffer);
     const hex = hashSum.digest('hex');
