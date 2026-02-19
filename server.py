@@ -69,7 +69,7 @@ def check_image():
             details = preds
             
         elif MODEL_TYPE == 'detector':
-            # detect returns [{'box': [y_min, x_min, y_max, x_max], 'score': float, 'label': str}, ...]
+            # detect returns [{'box': [y_min, x_min, y_max, x_max], 'score': float, 'class': str}, ...]
             detections = classifier.detect(file_path)
             details = detections
             
@@ -84,7 +84,8 @@ def check_image():
             
             max_score = 0
             for det in detections:
-                label = det.get('label')
+                # NudeDetector 返回的键是 'class' 而不是 'label'
+                label = det.get('class')
                 score = det.get('score', 0)
                 if label in NSFW_LABELS and score > 0.5:
                     is_nsfw = True
