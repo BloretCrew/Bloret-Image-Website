@@ -14,7 +14,7 @@ function startPythonServer() {
     
     // 假设 python 命令在环境变量中，或者你可以指定完整路径
     // 如果你的环境中是 python3，请修改为 python3
-    pythonProcess = spawn('python', ['server.py', PYTHON_PORT], {
+    pythonProcess = spawn('python3', ['server.py', PYTHON_PORT], {
         cwd: __dirname,
         stdio: 'inherit' // 让 Python 的输出显示在主进程控制台
     });
