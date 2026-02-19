@@ -14,7 +14,7 @@ function startPythonServer() {
     
     // 假设 python 命令在环境变量中，或者你可以指定完整路径
     // 如果你的环境中是 python3，请修改为 python3
-    pythonProcess = spawn('python3', ['server.py', PYTHON_PORT], {
+    pythonProcess = spawn('python', ['-u', 'server.py', PYTHON_PORT], { // 添加 -u 参数以禁用缓冲
         cwd: __dirname,
         stdio: 'inherit' // 让 Python 的输出显示在主进程控制台
     });
@@ -142,7 +142,7 @@ app.get('/img/:ts/:hash', (req, res) => {
     });
 });
 
-app.post('/api/upload', upload.single('image'), (req, res) => {
+app.post('/api/upload', upload.single('image'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
@@ -150,6 +150,25 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
     const tempPath = req.file.path;
     const originalName = req.file.originalname;
     const ext = path.extname(originalName).toLowerCase() || '.jpg';
+    
+    // NSFW Detection
+    try {
+        const isAdult = await isImageAdult(tempPath);
+        if (isAdult) {
+            const finalFileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`;
+            const unNSFWPath = path.join(UNNSFW_DIR, finalFileName);
+            
+            fs.rename(tempPath, unNSFWPath, (err) => {
+                if (err) console.error('Error moving NSFW file:', err);
+            });
+            
+            return res.status(400).json({ success: false, message: 'NSFW content detected. Upload rejected.' });
+        }
+    } catch (err) {
+        console.error('NSFW Check Error:', err);
+        // 如果检测服务挂了，这里可以选择拒绝上传
+        return res.status(500).json({ success: false, message: 'Image safety check failed. Please try again later.' });
+    }
     
     const fileBuffer = fs.readFileSync(tempPath);
     const hashSum = crypto.createHash('md5');

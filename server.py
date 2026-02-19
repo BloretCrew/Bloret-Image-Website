@@ -5,7 +5,7 @@ import nudenet
 from flask import Flask, request, jsonify
 
 # 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -16,6 +16,8 @@ def load_model():
     global classifier, MODEL_TYPE
     try:
         logger.info("尝试加载 NudeClassifier 模型...")
+        # 强制刷新缓冲区
+        sys.stdout.flush()
         from nudenet import NudeClassifier
         classifier = NudeClassifier()
         MODEL_TYPE = 'classifier'
@@ -34,6 +36,8 @@ def load_model():
     except Exception as e:
         logger.error(f"模型加载失败: {e}")
         sys.exit(1)
+    finally:
+        sys.stdout.flush()
 
 @app.route('/check', methods=['POST'])
 def check_image():
